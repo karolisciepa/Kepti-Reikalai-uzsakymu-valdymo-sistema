@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="lt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Kepti Reikalai</title>
+<!--
+  ============================================================================
+  KEPTI REIKALAI - maisto furgono valdymas. Vienas failas, be interneto.
+  ============================================================================
+  PRADZIOS EKRANAS:
+    * UZSAKYMU PRIEMIMAS -> priimti uzsakymus ir skaiciuoti suma; meniu
+      cia nekeiciamas.
+    * MENIU REDAGAVIMAS  -> prideti / salinti / keisti kategorijas,
+      patiekalus, kainas, sudeti; atsargines kopijos.
+
+  UZSAKYMU PRIEMIME 4 langai:
+    Uzsakymas        - kategorijos -> patiekalai -> krepselis -> Uzbaigti.
+    Einami uzsakymai - priimti, dar neuzdaryti uzsakymai (paruosti/uzdaryti).
+    Baigti uzsakymai - uzdaryti uzsakymai (istorija).
+    Ataskaita        - pardavimu suvestine pagal diena / savaite / menesi.
+
+  Visi duomenys saugomi tik sioje narsykleje (localStorage).
+  ============================================================================
+-->
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #17150f;
+    color: #f2e8d5;
+    font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    padding-bottom: 80px;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 12px; }
+
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 4px 0 12px;
+  }
+  header h1 {
+    font-size: 18px; margin: 0; letter-spacing: .5px;
+    color: #f2e8d5; flex: 1 1 auto; white-space: nowrap;
+  }
+  header h1 span { color: #f0a500; }
+  #nav { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .tab {
+    background: #262219; color: #cdc3ac;
+    border: 1px solid #3c3628; border-radius: 10px;
+    padding: 10px 14px; font-size: 15px; font-weight: 600;
+    cursor: pointer;
+  }
+  .tab.active { background: #f0a500; color: #1c1a12; border-color: #f0a500; }
+  .tab.home { background: #2b2718; color: #f2e8d5; }
+  .tab.edit-tag { background: #3a2c14; color: #f0a500; border-color: #5a4a24; }
+
+  /* ---- start screen ---- */
+  .home {
+    display: grid; grid-template-columns: 1fr; gap: 16px;
+    max-width: 520px; margin: 24px auto 0;
+  }
+  @media (min-width: 720px) { .home { grid-template-columns: 1fr 1fr; } }
+  .home-card {
+    background: #221f17; border: 1px solid #4a4230; border-radius: 18px;
+    padding: 34px 22px; text-align: center; cursor: pointer; color: #f2e8d5;
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+  }
+  .home-card:active { transform: scale(.99); }
+  .home-card.work { border-color: #5a7a34; }
+  .home-card.edit { border-color: #6a5424; }
+  .hc-title { font-size: 20px; font-weight: 800; letter-spacing: 1px; }
+  .hc-sub { font-size: 14px; color: #9a9078; }
+
+  .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  @media (min-width: 880px) {
+    .grid { grid-template-columns: 1.35fr 1fr; align-items: start; }
+    .ticket-col { position: sticky; top: 12px; }
+  }
+
+  .card {
+    background: #221f17; border: 1px solid #3c3628;
+    border-radius: 14px; padding: 14px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 14px; letter-spacing: 1px;
+    text-transform: uppercase; color: #b7ac91;
+  }
+
+  .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; }
+  .cat-tile {
+    background: #2b2718; border: 1px solid #4a4230; border-radius: 12px;
+    padding: 14px 8px; text-align: center; cursor: pointer;
+    display: flex; flex-direction: column; gap: 3px; align-items: center;
+    min-height: 70px; justify-content: center;
+  }
+  .cat-tile:active { transform: scale(.98); }
+  .cat-tile .label { font-weight: 700; font-size: 15px; letter-spacing: .5px; }
+  .cat-tile .count { font-size: 11px; color: #9a9078; }
+
+  .expand-all-btn {
+    background: #3a2c14; border: 1px solid #5a4a24; color: #f0a500;
+    border-radius: 10px; padding: 10px 14px; font-size: 15px; font-weight: 700;
+    cursor: pointer; margin-bottom: 12px; width: 100%;
+  }
+  .expand-all-btn:active { transform: scale(.99); }
+
+  .cat-section {
+    background: #221f17; border: 1px solid #3c3628; border-radius: 14px;
+    margin-bottom: 10px; overflow: hidden;
+  }
+  .cat-section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 14px; cursor: pointer; background: #2b2718;
+  }
+  .cat-section-head:active { opacity: .9; }
+  .cat-section-head .label { font-weight: 700; font-size: 15px; letter-spacing: .5px; }
+  .cat-section-head .count { font-size: 12px; color: #9a9078; }
+  .cat-section-head .chevron {
+    font-size: 13px; color: #cdc3ac; transition: transform .15s ease; flex: 0 0 auto;
+  }
+  .cat-section.open .chevron { transform: rotate(90deg); }
+  .cat-section-body { padding: 10px; }
+
+  .back-btn {
+    background: #2b2718; border: 1px solid #4a4230; color: #f2e8d5;
+    border-radius: 10px; padding: 10px 14px; font-size: 15px; font-weight: 600;
+    cursor: pointer; margin-bottom: 12px;
+  }
+
+  .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .item-btn {
+    display: flex; flex-direction: column; justify-content: center; gap: 3px;
+    background: #2b2718; border: 1px solid #4a4230; color: #f2e8d5;
+    border-radius: 12px; padding: 12px; font-size: 15px; cursor: pointer;
+    text-align: left; min-height: 60px;
+  }
+  .item-btn:active { transform: scale(.98); }
+  .item-btn .iname2 { font-weight: 600; line-height: 1.2; }
+  .item-btn .price { font-weight: 700; color: #f0a500; font-size: 14px; white-space: nowrap; }
+
+  /* order ticket */
+  .ticket-line {
+    display: grid; grid-template-columns: auto 1fr auto auto;
+    gap: 8px; align-items: center; padding: 8px 0;
+    border-bottom: 1px solid #332f22;
+  }
+  .qty { display: flex; align-items: center; gap: 4px; }
+  .qty button {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid #4a4230;
+    background: #2b2718; color: #f2e8d5; font-size: 18px; cursor: pointer;
+    line-height: 1;
+  }
+  .qty span { min-width: 22px; text-align: center; font-weight: 700; }
+  .ticket-line .lname { font-size: 15px; }
+  .ticket-line .lsub { font-size: 12px; color: #9a9078; }
+  .ticket-line .ltot { font-weight: 700; white-space: nowrap; }
+  .ticket-line .del {
+    background: none; border: none; color: #c8623f; font-size: 20px;
+    cursor: pointer; padding: 0 4px;
+  }
+  .total-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 14px; padding-top: 12px; border-top: 2px solid #4a4230;
+  }
+  .total-row .lbl { font-size: 14px; letter-spacing: 1px; color: #b7ac91; }
+  .total-row .val { font-size: 28px; font-weight: 800; color: #f0a500; }
+
+  .actions { display: flex; gap: 8px; margin-top: 12px; }
+  .btn {
+    flex: 1; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 700;
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .btn-primary { background: #7cb342; color: #16210a; }
+  .btn-ghost { background: #2b2718; color: #f2e8d5; border-color: #4a4230; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* menu editor */
+  .cat-block { border: 1px solid #3c3628; border-radius: 12px; padding: 12px; margin-bottom: 14px; }
+  .cat-head { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  input[type=text], input:not([type]) {
+    background: #17150f; border: 1px solid #4a4230; color: #f2e8d5;
+    border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit;
+  }
+  .cat-head input.cname { flex: 1; font-weight: 700; }
+  .price-input { width: 90px; text-align: right; }
+  .row {
+    display: flex; gap: 8px; align-items: center; padding: 6px 0;
+    border-bottom: 1px solid #2c2a1f;
+  }
+  .row input.iname { flex: 1; }
+  .row .del-x {
+    background: none; border: 1px solid #5a3b30; color: #c8623f;
+    border-radius: 8px; width: 38px; height: 38px; font-size: 18px; cursor: pointer;
+    flex: none;
+  }
+  .add-btn {
+    background: #2b2718; border: 1px solid #4a4230; color: #f0a500;
+    border-radius: 8px; padding: 10px 12px; font-weight: 700; cursor: pointer;
+    white-space: nowrap;
+  }
+  .add-cat-row { display: flex; gap: 8px; margin-top: 8px; }
+  .add-cat-row input.ncname { flex: 1; }
+  .hint { color: #9a9078; font-size: 13px; margin: 2px 0 12px; }
+
+  /* sales / summary tiles */
+  .sales-summary { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .stat { background: #2b2718; border: 1px solid #4a4230; border-radius: 10px; padding: 8px 12px; flex: 1; min-width: 104px; }
+  .stat .n { font-size: 19px; font-weight: 800; color: #f0a500; }
+  .stat .k { font-size: 11px; color: #b7ac91; letter-spacing: .5px; text-transform: uppercase; }
+
+  .sale-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+  .sale {
+    border: 1px solid #332f22; border-radius: 10px; padding: 9px 11px;
+    cursor: pointer; background: #211e16;
+  }
+  .sale:active { transform: scale(.99); }
+  .sale .s1 { display: flex; align-items: center; gap: 8px; }
+  .sale .ono { font-weight: 800; font-size: 15px; color: #f2e8d5; }
+  .beeper {
+    background: #3a2c14; color: #f0a500; border: 1px solid #5a4a24;
+    border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700;
+    white-space: nowrap;
+  }
+  .beeper.none { background: #262219; color: #9a9078; border-color: #3c3628; }
+  .sale .grand { margin-left: auto; font-weight: 800; color: #f0a500; font-size: 14px; white-space: nowrap; }
+  .sale .what {
+    font-size: 15px; color: #ffe6b0; font-weight: 600; margin-top: 6px;
+    line-height: 1.35;
+  }
+  .what-line { margin: 2px 0; }
+
+  /* list test layout for Einami / Baigti uzsakymai */
+  .olist { display: flex; flex-direction: column; }
+  .orow { border-bottom: 1px solid #2c2a1f; padding: 10px 2px; }
+  .orow[data-status="prepared"] { background: #1c221a; }
+  .orow-main { display: flex; align-items: baseline; gap: 8px 10px; flex-wrap: wrap; cursor: pointer; }
+  .orow-main .ono { font-weight: 800; font-size: 15px; }
+  .orow-main .grand { margin-left: auto; font-weight: 800; color: #f0a500; }
+  .orow-main .what { flex: 1 1 100%; font-size: 14px; color: #ffe6b0; font-weight: 600; margin: 2px 0 0; line-height: 1.35; display: block; }
+
+  /* order tracker */
+  .trk-head { display: flex; align-items: baseline; gap: 10px; margin: 0 0 10px; flex-wrap: wrap; }
+  .trk-head .n { font-size: 13px; color: #b7ac91; }
+  .sale.trk[data-status="prepared"] { border-color: #5a7a34; background: #1e241a; }
+  .tag-prep {
+    background: #33421f; color: #cfe6a8; border: 1px solid #5a7a34;
+    border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; letter-spacing: .5px;
+  }
+  .trk-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .trk-actions button {
+    flex: 1; border-radius: 8px; padding: 10px 8px; font-weight: 700; font-size: 13px;
+    cursor: pointer; border: 1px solid #4a4230; background: #2b2718; color: #f2e8d5;
+  }
+  .trk-actions .prep.done { background: #33421f; color: #cfe6a8; border-color: #5a7a34; }
+  .trk-actions .close { background: #7cb342; color: #16210a; border-color: #7cb342; }
+  .trk-actions .edit { background: #2b2718; color: #ffd08a; border-color: #6a5424; }
+  .trk-actions + .trk-actions { margin-top: 6px; }
+  .trk-actions button[disabled] { opacity: .4; cursor: not-allowed; }
+  .edit-note { font-size: 13px; color: #ffd08a; margin: -2px 0 10px; }
+  .cook-timer { margin-top: 9px; }
+  .cook-timer-meta { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; font-size: 12px; font-weight: 700; color: #cbd1d0; }
+  .cook-timer-track { height: 7px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,.12); }
+  .cook-timer-fill { height: 100%; border-radius: inherit; background: var(--timer-color, #5dbb63); transition: width .4s linear, background-color .4s linear; }
+  .sale .order-time { color: #cbd1d0; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .tracker-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(250px, .75fr); gap: 16px; align-items: start; }
+  .cooking-list { display: flex; flex-direction: column; gap: 8px; }
+  .cooking-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #4a4230; border-radius: 10px; background: #211e16; }
+  .cooking-line .dish-name { font-weight: 700; }
+  .cooking-line .dish-qty { color: #f0a500; font-size: 18px; font-weight: 800; white-space: nowrap; }
+  @media (max-width: 879px) { .tracker-layout { grid-template-columns: 1fr; } }
+
+  /* ingredients - menu editor */
+  .dish { border-bottom: 1px solid #2c2a1f; padding-bottom: 8px; margin-bottom: 4px; }
+  .dish .row { border-bottom: none; }
+  .ingredients { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 2px 2px; }
+  .ing-label { font-size: 12px; color: #9a9078; }
+  .ing-chip {
+    background: #2b2718; border: 1px solid #4a4230; border-radius: 999px;
+    padding: 3px 4px 3px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 2px;
+  }
+  .ing-chip button { background: none; border: none; color: #c8623f; font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .new-ing { width: 160px; padding: 7px 9px; font-size: 13px; }
+  .ing-add { padding: 7px 12px; }
+
+  /* ingredients - order ticket */
+  .lmid .lremoved { font-size: 12px; color: #e0967f; margin-top: 2px; }
+  .ing-toggle {
+    background: none; border: 1px solid #6a5424; color: #ffd08a;
+    border-radius: 8px; padding: 3px 9px; font-size: 12px; margin-top: 5px; cursor: pointer;
+  }
+  .ing-editor {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 8px 2px 12px; border-bottom: 1px solid #332f22;
+  }
+  .ing-pill {
+    border: 1px solid #5a7a34; background: #26301c; color: #cfe6a8;
+    border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .ing-pill.off {
+    border-color: #7a3b30; background: #2e1c19; color: #e0967f; text-decoration: line-through;
+  }
+  .data-tools { margin-top: 18px; padding-top: 14px; border-top: 1px solid #332f22; display: flex; gap: 8px; flex-wrap: wrap; }
+  .danger { background: none; border: 1px solid #5a3b30; color: #c8623f; border-radius: 8px; padding: 10px 12px; font-weight: 700; cursor: pointer; }
+
+  /* order detail */
+  .detail-head { display: flex; align-items: center; gap: 10px; margin: 6px 0 12px; flex-wrap: wrap; }
+  .detail-head .ono { font-size: 22px; font-weight: 800; }
+  .detail-meta { font-size: 13px; color: #9a9078; margin-bottom: 12px; }
+  .dline { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #332f22; }
+  .dline .dq { color: #9a9078; margin-right: 8px; }
+
+  /* report */
+  .rep-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .rep-tab {
+    flex: 1; border: 1px solid #4a4230; background: #2b2718; color: #cdc3ac;
+    border-radius: 9px; padding: 9px; font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .rep-tab.active { background: #f0a500; color: #1c1a12; border-color: #f0a500; }
+  .rep-list { display: flex; flex-direction: column; gap: 6px; }
+  .rep-row {
+    border: 1px solid #332f22; border-radius: 10px; background: #211e16;
+    padding: 10px 12px; cursor: pointer;
+  }
+  .rep-row.open { border-color: #6a5424; }
+  .rep-r1 { display: flex; align-items: baseline; gap: 10px; }
+  .rep-label { font-weight: 700; font-size: 14px; }
+  .rep-orders { font-size: 12px; color: #9a9078; }
+  .rep-total { margin-left: auto; font-weight: 800; color: #f0a500; }
+  .rep-break { margin-top: 8px; padding-top: 8px; border-top: 1px solid #332f22; }
+  .rep-item { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: #cdc3ac; }
+  .rep-item.rep-avg { margin-top: 4px; padding-top: 6px; border-top: 1px dashed #332f22; color: #b7ac91; font-weight: 700; }
+
+  /* finish / beeper modal */
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,.66);
+    display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px;
+  }
+  .modal {
+    background: #221f17; border: 1px solid #4a4230; border-radius: 16px;
+    padding: 20px; width: 100%; max-width: 340px;
+  }
+  .modal h3 { margin: 0 0 4px; font-size: 18px; }
+  .modal p { margin: 0 0 14px; color: #9a9078; font-size: 13px; }
+  .modal input.beeper-in {
+    width: 100%; font-size: 24px; text-align: center; padding: 14px;
+    border-radius: 10px; border: 1px solid #4a4230; background: #17150f; color: #f2e8d5;
+    font-family: inherit; margin-bottom: 14px;
+  }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions .btn { flex: 1; }
+  .modal .link {
+    display: block; width: 100%; margin-top: 10px; background: none; border: none;
+    color: #9a9078; font-size: 14px; cursor: pointer; text-decoration: underline;
+  }
+
+  /* mobile total bar */
+  .mobilebar {
+    position: fixed; left: 0; right: 0; bottom: 0; display: none;
+    background: #f0a500; color: #1c1a12; align-items: center;
+    justify-content: space-between; padding: 12px 18px; font-weight: 800;
+    box-shadow: 0 -4px 16px rgba(0,0,0,.4); cursor: pointer; z-index: 20;
+  }
+  .mobilebar span { font-size: 13px; letter-spacing: 1px; }
+  .mobilebar strong { font-size: 20px; }
+  @media (max-width: 879px) { .mobilebar.show { display: flex; } }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 92px; transform: translateX(-50%);
+    background: #7cb342; color: #16210a; font-weight: 700;
+    padding: 12px 20px; border-radius: 999px; z-index: 50;
+    box-shadow: 0 6px 20px rgba(0,0,0,.4);
+  }
+  .empty { color: #9a9078; padding: 8px 0; }
+
+  /* ---- light food-truck backdrop (decorative only; no app logic) ---- */
+  :root { --ink: #28221e; --ink-soft: #453a34; --cream: rgba(255,252,245,.88); --line: #d9cabb; --accent: #bf651f; }
+  body {
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 77% 7%, rgba(255,255,255,.96) 0 9%, transparent 27%),
+      radial-gradient(circle at 12% 86%, rgba(255,228,186,.72) 0 10%, transparent 34%),
+      linear-gradient(135deg, #fff8e9 0%, #f7ead5 48%, #f1dec4 100%);
+    min-height: 100vh;
+  }
+  .foodtruck-scene {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+    background: url("kepti-reikalai-burger-background.jpg") center 60% / cover no-repeat;
+  }
+  .foodtruck-scene::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, rgba(7,10,11,.86), rgba(7,10,11,.70) 48%, rgba(7,10,11,.38)),
+                rgba(7,10,11,.22);
+  }
+  .wrap { position: relative; z-index: 1; }
+  header { padding-top: 12px; }
+  header h1 { color: #332922; text-shadow: 0 1px 0 rgba(255,255,255,.8); }
+  header h1 span { color: #a94e1d; }
+  .tab, .tab.home, .tab.edit-tag, .back-btn, .btn-ghost, .add-btn, .expand-all-btn,
+  .cat-tile, .cat-section-head, .item-btn, .qty button, .trk-actions button,
+  .rep-tab, input[type=text], input:not([type]) {
+    background: var(--ink); color: #fffaf2; border-color: #4b4038;
+    box-shadow: 0 2px 5px rgba(74,45,25,.10);
+  }
+  .tab.active, .rep-tab.active { background: #63311f; color: #fffaf2; border-color: #63311f; }
+  .tab.edit-tag, .expand-all-btn, .add-btn { color: #ffd99c; }
+  .card, .home-card, .cat-section, .sale, .stat, .cat-block, .report-card, .modal-box {
+    background: var(--cream); border-color: var(--line); color: var(--ink);
+    box-shadow: 0 8px 24px rgba(91,57,32,.10);
+  }
+  .card h2, .home-card, .hc-sub, .hint, .empty, .cat-tile .count, .cat-section-head .count,
+  .total-row .lbl, .stat .k, .trk-head .n { color: var(--ink-soft); }
+  .item-btn .price, .total-row .val, .stat .n, .sale .grand, .orow-main .grand { color: #a94e1d; }
+  .sale .ono, .sale .what, .orow-main .what, .orow-main .ono { color: var(--ink); }
+  .btn-primary, .trk-actions .close { background: #29483d; color: #fff; border-color: #29483d; }
+  .mobilebar { background: #28221e; color: #fffaf2; box-shadow: 0 -4px 16px rgba(74,45,25,.24); }
+  .toast { background: #3e6b43; color: #fff; }
+
+  /* Screenshot reference: dark glass cards and yellow controls over the user's food photo. */
+  :root { --ink: #111719; --ink-soft: #cbd1d0; --cream: rgba(14,19,20,.89); --line: rgba(255,255,255,.17); }
+  body { color: #f4f5f3; background: #0b0f10; }
+  header h1 { color: #f4f5f3; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+  header h1 span, .item-btn .price, .total-row .val, .stat .n, .sale .grand, .orow-main .grand { color: #ffbd17; }
+  .tab, .tab.home, .tab.edit-tag, .back-btn, .btn-ghost, .add-btn, .expand-all-btn,
+  .cat-tile, .cat-section-head, .item-btn, .qty button, .trk-actions button,
+  .rep-tab, input[type=text], input:not([type]) { background: rgba(10,14,15,.94); color: #f7f7f4; border-color: rgba(255,255,255,.14); }
+  .tab.active, .rep-tab.active { background: #ffb90f; color: #151411; border-color: #ffb90f; }
+  .tab.edit-tag, .expand-all-btn, .add-btn { color: #ffbd17; }
+  .card, .home-card, .cat-section, .sale, .stat, .cat-block, .report-card, .modal-box {
+    background: rgba(12,17,18,.90); border-color: rgba(255,255,255,.16); color: #f6f6f3;
+    box-shadow: 0 14px 30px rgba(0,0,0,.34); backdrop-filter: blur(7px);
+  }
+  .card h2, .home-card, .hc-sub, .hint, .empty, .cat-tile .count, .cat-section-head .count,
+  .total-row .lbl, .stat .k, .trk-head .n { color: #c8cdcb; }
+  .sale .ono, .sale .what, .orow-main .what, .orow-main .ono { color: #f4f5f3; }
+  .btn-primary, .trk-actions .close { background: #ffb90f; color: #151411; border-color: #ffb90f; }
+  .mobilebar { background: rgba(10,14,15,.96); color: #fff; }
+  .toast { background: #ffb90f; color: #151411; }
+  header { position: relative; min-height: 74px; justify-content: flex-end; }
+  header .brand { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); margin: 0; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 0; white-space: nowrap; }
+  header .brand-word { color: #f4f5f3; font-size: 20px; font-weight: 800; letter-spacing: 1px; line-height: 1; }
+  header .brand-mark { display: flex; width: 62px; height: 62px; align-items: center; }
+  header .brand-mark img { display: block; width: 100%; height: auto; }
+  #nav { position: relative; z-index: 1; margin-left: auto; }
+  @media (max-width: 719px) {
+    header { padding-top: 68px; min-height: 0; justify-content: center; }
+    header .brand { top: 8px; gap: 8px; }
+    header .brand-word { font-size: 16px; letter-spacing: .7px; }
+    header .brand-mark { width: 50px; height: 50px; }
+    #nav { margin-left: 0; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="foodtruck-scene" aria-hidden="true"></div>
+<div class="wrap">
+  <header>
+    <h1 class="brand" aria-label="Kepti Reikalai"><span class="brand-word">KEPTI</span><span class="brand-mark"><img src="kepti-reikalai-truck-logo.png" alt=""></span><span class="brand-word">REIKALAI</span></h1>
+    <div id="nav"></div>
+  </header>
+  <div id="app"></div>
+</div>
+<div class="mobilebar" id="mobilebar" data-action="goticket">
+  <span>UŽSAKYMO SUMA</span><strong id="mbTotal">0.00 &euro;</strong>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var STORE_KEY = "keptireikalai_v1";
+  var LT_MONTHS = ["Sausis", "Vasaris", "Kovas", "Balandis", "Gegužė", "Birželis",
+                   "Liepa", "Rugpjūtis", "Rugsėjis", "Spalis", "Lapkritis", "Gruodis"];
+
+  function uid() {
+    return "x" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function seedData() {
+    var cats = [
+      { id: "burgers", name: "BURGERIAI" },
+      { id: "snacks",  name: "UŽKANDŽIAI" },
+      { id: "salads",  name: "SALOTOS" },
+      { id: "coffee",  name: "GĖRIMAI" }
+    ];
+    var B = ["Svogūnai", "Pomidorai", "Salotos", "Sūris", "Padažas", "Marinuoti agurkėliai"];
+    var raw = {
+      burgers: [
+        ["Jautiena", 12, B],
+        ["Pulled Pork", 12, B],
+        ["Vištiena", 12, B],
+        ["Vegetariškas", 12, B]
+      ],
+      snacks: [
+        ["Plėšytos kiaulienos lėkštė", 12, B],
+        ["Bowl'as su vištiena", 12, B],
+        ["Vištienos juostelės", 10, B],
+        ["Sūrio spurgytės", 8],
+        ["Mozzarella lazdelės", 8],
+        ["Kalmarų žiedai", 7],
+        ["Svogūnų žiedai", 6],
+        ["Porcija bulvyčių", 5]
+      ],
+      salads: [["Salotos su vištiena", 10, B]],
+      coffee: [
+        ["Kava", 3],
+        ["Pepsi", 2],
+        ["7UP", 2],
+        ["Mirinda", 2],
+        ["Redbull", 3]
+      ]
+    };
+    var items = [];
+    Object.keys(raw).forEach(function (cid) {
+      raw[cid].forEach(function (pair) {
+        items.push({ id: uid(), name: pair[0], price: pair[1], categoryId: cid, ingredients: (pair[2] || []).slice() });
+      });
+    });
+    return { categories: cats, items: items, order: [], sales: [] };
+  }
+
+  var data;
+  try {
+    var stored = localStorage.getItem(STORE_KEY);
+    data = stored ? JSON.parse(stored) : seedData();
+  } catch (e) {
+    data = seedData();
+  }
+  if (!data.categories) data.categories = [];
+  if (!data.items) data.items = [];
+  if (!data.order) data.order = [];
+  if (!data.sales) data.sales = [];
+  if (typeof data.nextOrderNo !== "number") {
+    var maxNo = 0;
+    data.sales.forEach(function (s) { if (s.orderNo > maxNo) maxNo = s.orderNo; });
+    data.nextOrderNo = Math.max(maxNo + 1, data.sales.length + 1);
+  }
+  // status: "active" -> "prepared" -> "closed". Old records had none -> closed.
+  data.sales.forEach(function (s) { if (!s.status) s.status = "closed"; });
+  data.items.forEach(function (i) { if (!Array.isArray(i.ingredients)) i.ingredients = []; });
+  function normLines(list) {
+    (list || []).forEach(function (l) {
+      if (!l.lineId) l.lineId = uid();
+      if (!Array.isArray(l.ingredients)) l.ingredients = [];
+      if (!Array.isArray(l.removed)) l.removed = [];
+    });
+  }
+  data.sales.forEach(function (s) { normLines(s.lines); });
+  normLines(data.order);
+
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); }
+    catch (e) { alert("Nepavyko išsaugoti duomenų."); }
+  }
+
+  // screen: "home" | "work" | "edit"   view (work): "order" | "tracker" | "history" | "report"
+  var state = {
+    screen: "home", view: "order", browseCat: null, expandedCats: {},
+    finishing: false, detailSaleId: null, editingSaleId: null, editLineId: null,
+    reportPeriod: "day", reportOpen: null
+  };
+
+  // ---------- helpers ----------
+  function money(n) {
+    n = Math.round((Number(n) || 0) * 100) / 100;
+    return n.toFixed(2) + " €";
+  }
+  function parseMoney(v) {
+    var n = parseFloat(String(v).replace(",", ".").replace(/[^0-9.]/g, ""));
+    return isFinite(n) && n >= 0 ? n : 0;
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function itemsOf(catId) {
+    return data.items.filter(function (i) { return i.categoryId === catId; });
+  }
+  function orderTotal() {
+    return data.order.reduce(function (s, l) { return s + l.price * l.qty; }, 0);
+  }
+  function findItem(id) {
+    for (var i = 0; i < data.items.length; i++) if (data.items[i].id === id) return data.items[i];
+    return null;
+  }
+  function findCat(id) {
+    for (var i = 0; i < data.categories.length; i++) if (data.categories[i].id === id) return data.categories[i];
+    return null;
+  }
+  function findSale(id) {
+    for (var i = 0; i < data.sales.length; i++) if (data.sales[i].id === id) return data.sales[i];
+    return null;
+  }
+  function sameDay(ts, ref) {
+    var a = new Date(ts), b = new Date(ref);
+    return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+  function whenText(ts) {
+    var d = new Date(ts);
+    return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  function timeOnly(ts) {
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  function toast(msg) {
+    var t = document.createElement("div");
+    t.className = "toast";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 1700);
+  }
+  function beeperChip(s) {
+    return s.beeper
+      ? '<span class="beeper">Pager\'is ' + esc(s.beeper) + "</span>"
+      : '<span class="beeper none">be Pager\'io</span>';
+  }
+  function lineText(l) {
+    var t = l.qty + "× " + l.name;
+    if (l.removed && l.removed.length) t += " (be " + l.removed.join(", be ") + ")";
+    return t;
+  }
+  function itemSummary(s) {
+    return s.lines.map(function (l) {
+      return '<div class="what-line">' + esc(lineText(l)) + "</div>";
+    }).join("");
+  }
+  function unionArr(a, b) {
+    var out = (a || []).slice();
+    (b || []).forEach(function (x) { if (out.indexOf(x) < 0) out.push(x); });
+    return out;
+  }
+
+  // ---------- nav ----------
+  function renderNav() {
+    if (state.screen === "home") return "";
+    if (state.screen === "edit") {
+      return '<button class="tab home" data-action="home">&lsaquo; Baigti redagavimą</button>' +
+             '<span class="tab edit-tag">Redagavimo režimas</span>';
+    }
+    var live = data.sales.filter(function (s) { return s.status !== "closed"; }).length;
+    function tab(view, label) {
+      return '<button class="tab' + (state.view === view ? " active" : "") +
+        '" data-action="wview" data-view="' + view + '">' + label + "</button>";
+    }
+    return '<button class="tab home" data-action="home">Pradžia</button>' +
+      tab("order", "Užsakymas") +
+      tab("tracker", "Einami užsakymai" + (live ? " (" + live + ")" : "")) +
+      tab("history", "Baigti užsakymai") +
+      tab("report", "Ataskaita");
+  }
+
+  // ---------- start screen ----------
+  function renderHome() {
+    return '<div class="home">' +
+      '<button class="home-card work" data-action="go" data-screen="work">' +
+        '<div class="hc-title">UŽSAKYMŲ PRIĖMIMAS</div>' +
+        '<div class="hc-sub">Priimti užsakymus ir skaičiuoti sumą. Meniu čia nekeičiamas.</div>' +
+      '</button>' +
+      '<button class="home-card edit" data-action="go" data-screen="edit">' +
+        '<div class="hc-title">MENIU REDAGAVIMAS</div>' +
+        '<div class="hc-sub">Pridėti, šalinti ir keisti patiekalus, kainas, kategorijas, sudėtį.</div>' +
+      '</button>' +
+    '</div>';
+  }
+
+  // ---------- work: order ----------
+  function renderOrder() {
+    var catalog;
+    if (!data.categories.length) {
+      catalog = '<div class="empty">Kategorijų nėra. Pradžia &rarr; Meniu redagavimas.</div>';
+    } else {
+      var allOpen = data.categories.every(function (c) { return !!state.expandedCats[c.id]; });
+      catalog = '<button class="expand-all-btn" data-action="toggle-all-cats">' +
+          (allOpen ? "Suskleisti visas kategorijas" : "Išskleisti visas kategorijas") +
+        "</button>" +
+        data.categories.map(function (c) {
+          var open = !!state.expandedCats[c.id];
+          var list = itemsOf(c.id);
+          return '<div class="cat-section' + (open ? " open" : "") + '">' +
+            '<div class="cat-section-head" data-action="toggle-cat" data-id="' + c.id + '">' +
+              '<span class="label">' + esc(c.name) + "</span>" +
+              '<span class="count">' + list.length + " patiek.</span>" +
+              '<span class="chevron">&#9656;</span>' +
+            "</div>" +
+            (open
+              ? '<div class="cat-section-body">' +
+                  (list.length
+                    ? '<div class="item-grid">' + list.map(function (i) {
+                        return '<button class="item-btn" data-action="add" data-id="' + i.id + '">' +
+                          '<span class="iname2">' + esc(i.name) + '</span>' +
+                          '<span class="price">' + money(i.price) + "</span>" +
+                        "</button>";
+                      }).join("") + "</div>"
+                    : '<div class="empty">Šioje kategorijoje patiekalų nėra.</div>') +
+                "</div>"
+              : "") +
+          "</div>";
+        }).join("");
+    }
+
+    var lines = data.order.length ? data.order.map(function (l) {
+      var ing = l.ingredients || [];
+      var rem = l.removed || [];
+      var removedNote = rem.length
+        ? '<div class="lremoved">be ' + rem.map(esc).join(", be ") + "</div>" : "";
+      var ingBtn = ing.length
+        ? '<button class="ing-toggle" data-action="toggle-ing-edit" data-id="' + l.lineId + '">' +
+            (state.editLineId === l.lineId ? "Gerai" : "Redaguoti sudėtį") + "</button>"
+        : "";
+      var editor = (ing.length && state.editLineId === l.lineId)
+        ? '<div class="ing-editor">' + ing.map(function (g) {
+            var off = rem.indexOf(g) >= 0;
+            return '<button class="ing-pill' + (off ? " off" : "") + '" data-action="toggle-ing" data-id="' +
+              l.lineId + '" data-ing="' + esc(g) + '">' + esc(g) + "</button>";
+          }).join("") + "</div>"
+        : "";
+      return '<div class="ticket-line">' +
+        '<div class="qty">' +
+          '<button data-action="dec" data-id="' + l.lineId + '">&minus;</button>' +
+          "<span>" + l.qty + "</span>" +
+          '<button data-action="inc" data-id="' + l.lineId + '">+</button>' +
+        "</div>" +
+        '<div class="lmid"><div class="lname">' + esc(l.name) + "</div>" +
+          '<div class="lsub">' + money(l.price) + " x " + l.qty + "</div>" +
+          removedNote + ingBtn +
+        "</div>" +
+        '<div class="ltot">' + money(l.price * l.qty) + "</div>" +
+        '<button class="del" data-action="rm" data-id="' + l.lineId + '" title="Šalinti">&times;</button>' +
+      "</div>" + editor;
+    }).join("") : '<div class="empty">Užsakymas tuščias. Palieskite patiekalą.</div>';
+
+    var has = data.order.length > 0;
+    var editing = state.editingSaleId ? findSale(state.editingSaleId) : null;
+
+    return '<div class="grid">' +
+      '<div class="card">' + catalog + "</div>" +
+      '<div class="ticket-col"><div class="card" id="ticket">' +
+        "<h2>" + (editing ? "Redaguojamas užsakymas #" + (editing.orderNo || "?") : "Užsakymas") + "</h2>" +
+        (editing ? '<div class="edit-note">Pridėkite ar pašalinkite patiekalus, tada išsaugokite.</div>' : "") +
+        lines +
+        '<div class="total-row"><span class="lbl">VISO</span><span class="val">' + money(orderTotal()) + "</span></div>" +
+        '<div class="actions">' +
+          (editing
+            ? '<button class="btn btn-ghost" data-action="cancel-edit">Atšaukti</button>'
+            : '<button class="btn btn-ghost" data-action="clear"' + (has ? "" : " disabled") + ">Išvalyti</button>") +
+          '<button class="btn btn-primary" data-action="complete"' + (has ? "" : " disabled") + ">" +
+            (editing ? "Išsaugoti" : "Užbaigti") + "</button>" +
+        "</div>" +
+      "</div></div>" +
+    "</div>";
+  }
+
+  // ---------- work: einami uzsakymai (tracker) ----------
+  function cookingTimer(s) {
+    var limit = 10 * 60 * 1000;
+    var elapsed = Math.max(0, Date.now() - s.time);
+    var used = Math.min(100, (elapsed / limit) * 100);
+    var remaining = Math.max(0, limit - elapsed);
+    var totalSeconds = Math.ceil(remaining / 1000);
+    var mins = Math.floor(totalSeconds / 60);
+    var secs = totalSeconds % 60;
+    var timeText = mins + ":" + (secs < 10 ? "0" : "") + secs;
+    var hue = Math.max(0, 120 - (used * 1.2));
+    var label = remaining ? "Liko " + timeText : "Viršytas 10 min. laikas";
+    return '<div class="cook-timer"><div class="cook-timer-meta"><span>Gaminama iki 10 min.</span><span>' + label +
+      '</span></div><div class="cook-timer-track"><div class="cook-timer-fill" style="width:' + used.toFixed(1) +
+      '%;--timer-color:hsl(' + hue.toFixed(0) + ',72%,45%)"></div></div></div>';
+  }
+
+  function renderTracker() {
+    if (state.detailSaleId) return renderOrderDetail();
+
+    var live = data.sales.filter(function (s) { return s.status !== "closed"; })
+                         .sort(function (a, b) { return a.time - b.time; });
+
+    var rows = live.map(function (s) {
+      var prepared = s.status === "prepared";
+      return '<div class="sale trk" data-status="' + s.status + '">' +
+        '<div class="s1" data-action="open-detail" data-id="' + s.id + '">' +
+          '<span class="ono">#' + (s.orderNo || "?") + "</span>" +
+          beeperChip(s) +
+          (prepared ? '<span class="tag-prep">PARUOŠTA</span>' : "") +
+          '<span class="grand">' + money(s.total) + "</span>" +
+          '<span class="order-time">Priimtas ' + timeOnly(s.time) + "</span>" +
+        "</div>" +
+        '<div class="what" data-action="open-detail" data-id="' + s.id + '">' + itemSummary(s) + "</div>" +
+        (prepared ? "" : cookingTimer(s)) +
+        '<div class="trk-actions">' +
+          '<button class="edit" data-action="track-edit" data-id="' + s.id + '">Pridėti / keisti</button>' +
+        "</div>" +
+        '<div class="trk-actions">' +
+          '<button class="prep' + (prepared ? " done" : "") + '" data-action="mark-prepared" data-id="' + s.id + '">' +
+            (prepared ? "Paruošta ✓" : "Užsakymas paruoštas") + "</button>" +
+          '<button class="close" data-action="close-order" data-id="' + s.id + '"' + (prepared ? "" : " disabled") + ">Užbaigti</button>" +
+        "</div>" +
+      "</div>";
+    }).join("");
+
+    var preppedCount = live.filter(function (s) { return s.status === "prepared"; }).length;
+    var list = rows ? '<div class="sale-grid">' + rows + "</div>"
+                    : '<div class="empty">Vykdomų užsakymų nėra. Priimti užsakymai čia lieka, kol jų neuždarysite.</div>';
+    var cooking = {};
+    live.filter(function (s) { return s.status === "active"; }).forEach(function (s) {
+      (s.lines || []).forEach(function (l) {
+        cooking[l.name] = (cooking[l.name] || 0) + (Number(l.qty) || 0);
+      });
+    });
+    var cookingRows = Object.keys(cooking).map(function (name) {
+      return '<div class="cooking-line"><span class="dish-name">' + esc(name) +
+        '</span><span class="dish-qty">' + cooking[name] + ' vnt.</span></div>';
+    }).join("");
+    var cookingList = cookingRows || '<div class="empty">Šiuo metu nėra gaminamų patiekalų.</div>';
+
+    return '<div class="tracker-layout"><div class="card">' +
+      "<h2>Einami užsakymai</h2>" +
+      '<div class="trk-head"><span class="n">Vykdoma: ' + live.length +
+        (preppedCount ? "  ·  Paruošta: " + preppedCount : "") + "</span></div>" +
+      list +
+      '<p class="hint" style="margin-top:12px">Palieskite užsakymą, kad pamatytumėte patiekalus. Pirmiausia pažymėkite <b>Užsakymas paruoštas</b>, tada <b>Užbaigti</b> perkelia jį į Baigtus.</p>' +
+    '</div><aside class="card"><h2>Šiuo metu gaminami patiekalai</h2><div class="cooking-list">' + cookingList +
+    "</div></aside></div>";
+  }
+
+  // ---------- work: baigti uzsakymai (history) ----------
+  function renderHistory() {
+    if (state.detailSaleId) return renderOrderDetail();
+
+    var now = Date.now();
+    var closed = data.sales.filter(function (s) { return s.status === "closed"; });
+    var todayTotal = 0, todayCount = 0, allTotal = 0;
+    closed.forEach(function (s) {
+      allTotal += s.total;
+      if (sameDay(s.time, now)) { todayTotal += s.total; todayCount++; }
+    });
+
+    var rows = closed.slice().sort(function (a, b) { return b.time - a.time; }).map(function (s) {
+      return '<div class="orow">' +
+        '<div class="orow-main" data-action="open-detail" data-id="' + s.id + '">' +
+          '<span class="ono">#' + (s.orderNo || "?") + "</span>" + beeperChip(s) +
+          '<span class="grand">' + money(s.total) + "</span>" +
+          '<span class="what">' + itemSummary(s) + "</span>" +
+        "</div>" +
+      "</div>";
+    }).join("");
+    var list = rows ? '<div class="olist">' + rows + "</div>"
+                    : '<div class="empty">Baigtų užsakymų dar nėra.</div>';
+
+    return '<div class="card">' +
+      "<h2>Baigti užsakymai</h2>" +
+      '<div class="sales-summary">' +
+        '<div class="stat"><div class="n">' + money(todayTotal) + '</div><div class="k">Šiandien</div></div>' +
+        '<div class="stat"><div class="n">' + todayCount + '</div><div class="k">Užsakymų šiandien</div></div>' +
+        '<div class="stat"><div class="n">' + money(allTotal) + '</div><div class="k">Iš viso</div></div>' +
+      "</div>" +
+      list +
+      '<p class="hint" style="margin-top:12px">Palieskite užsakymą, kad pamatytumėte viską. Istorijos trynimas ir kopijos – Meniu redagavimo režime.</p>' +
+    "</div>";
+  }
+
+  function renderOrderDetail() {
+    var s = findSale(state.detailSaleId);
+    if (!s) { state.detailSaleId = null; return (state.view === "tracker") ? renderTracker() : renderHistory(); }
+    var rows = s.lines.map(function (l) {
+      var rem = (l.removed && l.removed.length)
+        ? '<div class="lremoved">be ' + l.removed.map(esc).join(", be ") + "</div>" : "";
+      return '<div class="dline"><div><span class="dq">' + l.qty + " &times;</span>" + esc(l.name) + rem + "</div>" +
+        "<div>" + money(l.price * l.qty) + "</div></div>";
+    }).join("");
+    var statusLabel = s.status === "closed" ? "Baigtas" : (s.status === "prepared" ? "Paruoštas" : "Vykdomas");
+    return '<div class="card">' +
+      '<button class="back-btn" data-action="close-detail">&lsaquo; Atgal</button>' +
+      '<div class="detail-head">' +
+        '<span class="ono">Užsakymas #' + (s.orderNo || "?") + "</span>" +
+        beeperChip(s) +
+        '<span class="beeper none">' + statusLabel + "</span>" +
+      "</div>" +
+      '<div class="detail-meta">' + esc(whenText(s.time)) + "</div>" +
+      rows +
+      '<div class="total-row"><span class="lbl">VISO</span><span class="val">' + money(s.total) + "</span></div>" +
+      (s.status === "closed"
+        ? '<div class="actions"><button class="btn btn-ghost" data-action="reopen-order" data-id="' + s.id + '">Grąžinti į einamus</button></div>'
+        : "") +
+    "</div>";
+  }
+
+  // ---------- work: ataskaita (report) ----------
+  function mondayOf(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var wd = (x.getDay() + 6) % 7;
+    x.setDate(x.getDate() - wd);
+    return x;
+  }
+  function reportBuckets(period) {
+    var closed = data.sales.filter(function (s) { return s.status === "closed"; });
+    var map = {};
+    closed.forEach(function (s) {
+      var d = new Date(s.time), key, label, sortTs;
+      if (period === "month") {
+        key = d.getFullYear() + "-" + pad2(d.getMonth() + 1);
+        label = LT_MONTHS[d.getMonth()] + " " + d.getFullYear();
+        sortTs = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+      } else if (period === "week") {
+        var mon = mondayOf(d);
+        var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        key = mon.getFullYear() + "-" + pad2(mon.getMonth() + 1) + "-" + pad2(mon.getDate());
+        label = mon.toLocaleDateString() + " – " + sun.toLocaleDateString();
+        sortTs = mon.getTime();
+      } else {
+        key = d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+        label = d.toLocaleDateString();
+        sortTs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      }
+      var b = map[key] || (map[key] = { key: key, label: label, sortTs: sortTs, orders: 0, total: 0, items: {} });
+      b.orders++;
+      b.total += s.total;
+      s.lines.forEach(function (l) { b.items[l.name] = (b.items[l.name] || 0) + l.qty; });
+    });
+    return Object.keys(map).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return b.sortTs - a.sortTs; });
+  }
+
+  function renderReport() {
+    var period = state.reportPeriod || "day";
+    var buckets = reportBuckets(period);
+    var grandOrders = 0, grandTotal = 0;
+    buckets.forEach(function (b) { grandOrders += b.orders; grandTotal += b.total; });
+
+    var tabs = [["day", "Diena"], ["week", "Savaitė"], ["month", "Mėnuo"]].map(function (p) {
+      return '<button class="rep-tab' + (period === p[0] ? " active" : "") +
+        '" data-action="report-period" data-period="' + p[0] + '">' + p[1] + "</button>";
+    }).join("");
+
+    var rows = buckets.map(function (b) {
+      var open = state.reportOpen === b.key;
+      var breakdown = "";
+      if (open) {
+        var its = Object.keys(b.items).map(function (n) { return { n: n, q: b.items[n] }; })
+          .sort(function (x, y) { return y.q - x.q; });
+        breakdown = '<div class="rep-break">' +
+          its.map(function (it) {
+            return '<div class="rep-item"><span>' + esc(it.n) + "</span><span>" + it.q + " vnt.</span></div>";
+          }).join("") +
+          '<div class="rep-item rep-avg"><span>Vidutinis užsakymas</span><span>' +
+            money(b.orders ? b.total / b.orders : 0) + "</span></div>" +
+        "</div>";
+      }
+      return '<div class="rep-row' + (open ? " open" : "") + '" data-action="report-open" data-key="' + esc(b.key) + '">' +
+        '<div class="rep-r1">' +
+          '<span class="rep-label">' + esc(b.label) + "</span>" +
+          '<span class="rep-orders">' + b.orders + " užsak.</span>" +
+          '<span class="rep-total">' + money(b.total) + "</span>" +
+        "</div>" + breakdown +
+      "</div>";
+    }).join("");
+
+    return '<div class="card">' +
+      "<h2>Ataskaita</h2>" +
+      '<div class="rep-tabs">' + tabs + "</div>" +
+      '<div class="sales-summary">' +
+        '<div class="stat"><div class="n">' + money(grandTotal) + '</div><div class="k">Iš viso</div></div>' +
+        '<div class="stat"><div class="n">' + grandOrders + '</div><div class="k">Užsakymų</div></div>' +
+        '<div class="stat"><div class="n">' + money(grandOrders ? grandTotal / grandOrders : 0) + '</div><div class="k">Vidut. užsak.</div></div>' +
+      "</div>" +
+      (rows ? '<div class="rep-list">' + rows + "</div>"
+            : '<div class="empty">Baigtų užsakymų dar nėra.</div>') +
+      '<p class="hint" style="margin-top:12px">Skaičiuojami tik baigti užsakymai. Palieskite eilutę, kad pamatytumėte parduotus patiekalus.</p>' +
+    "</div>";
+  }
+
+  // ---------- finish / beeper modal ----------
+  function renderFinishModal() {
+    if (!state.finishing) return "";
+    var editing = state.editingSaleId ? findSale(state.editingSaleId) : null;
+    var no = editing ? (editing.orderNo || "?") : (data.nextOrderNo || 1);
+    var curBeeper = (editing && editing.beeper) ? esc(editing.beeper) : "";
+    return '<div class="modal-back" data-action="finish-backdrop">' +
+      '<div class="modal">' +
+        "<h3>" + (editing ? "Išsaugoti užsakymą #" + no : "Priskirti Pager\'į") + "</h3>" +
+        "<p>Užsakymas #" + no + "  ·  " + money(orderTotal()) + "</p>" +
+        '<input class="beeper-in" id="beeperInput" type="text" inputmode="numeric" ' +
+          'autocomplete="off" placeholder="Pager\'io numeris" value="' + curBeeper + '">' +
+        '<div class="modal-actions">' +
+          '<button class="btn btn-ghost" data-action="finish-cancel">Atšaukti</button>' +
+          '<button class="btn btn-primary" data-action="finish-confirm">Išsaugoti</button>' +
+        "</div>" +
+        '<button class="link" data-action="finish-skip">Išsaugoti be Pager\'io</button>' +
+      "</div>" +
+    "</div>";
+  }
+
+  // ---------- edit: meniu ----------
+  function renderEdit() {
+    var blocks = data.categories.map(function (c) {
+      var rows = itemsOf(c.id).map(function (i) {
+        var chips = (i.ingredients || []).map(function (g) {
+          return '<span class="ing-chip">' + esc(g) +
+            '<button data-action="del-ing" data-id="' + i.id + '" data-ing="' + esc(g) + '" title="Šalinti">&times;</button></span>';
+        }).join("");
+        return '<div class="dish">' +
+          '<div class="row">' +
+            '<input type="text" class="iname" data-field="item-name" data-id="' + i.id + '" value="' + esc(i.name) + '">' +
+            '<input type="text" inputmode="decimal" class="price-input" data-field="item-price" data-id="' + i.id + '" value="' + i.price + '">' +
+            '<button class="del-x" data-action="del-item" data-id="' + i.id + '">&times;</button>' +
+          "</div>" +
+          '<div class="ingredients">' +
+            '<span class="ing-label">Sudėtis:</span>' + chips +
+            '<input type="text" class="new-ing" placeholder="pridėti (pvz. Svogūnai)">' +
+            '<button class="add-btn ing-add" data-action="add-ing" data-id="' + i.id + '">+</button>' +
+          "</div>" +
+        "</div>";
+      }).join("");
+      return '<div class="cat-block">' +
+        '<div class="cat-head">' +
+          '<input type="text" class="cname" data-field="cat-name" data-id="' + c.id + '" value="' + esc(c.name) + '">' +
+          '<button class="del-x" data-action="del-cat" data-id="' + c.id + '">&times;</button>' +
+        "</div>" +
+        rows +
+        '<div class="row">' +
+          '<input type="text" class="iname newname" placeholder="Naujas patiekalas">' +
+          '<input type="text" inputmode="decimal" class="price-input newprice" placeholder="Kaina">' +
+          '<button class="add-btn" data-action="add-item" data-id="' + c.id + '">Pridėti</button>' +
+        "</div>" +
+      "</div>";
+    }).join("");
+
+    return '<div class="card">' +
+      "<h2>Meniu</h2>" +
+      '<p class="hint">Pavadinimą ar kainą pakeiskite paliesdami lauką ir įvesdami (išsaugoma paliekant lauką). Kainą galima rašyti 8 arba 8.50. Po kiekvienu patiekalu pridėkite jo sudėtį (Svogūnai, Padažas, ...) – tada užsakyme galėsite ją išbraukti.</p>' +
+      (blocks || '<div class="empty">Kategorijų nėra.</div>') +
+      '<div class="add-cat-row">' +
+        '<input type="text" class="ncname" id="ncname" placeholder="Nauja kategorija (pvz. GĖRIMAI)">' +
+        '<button class="add-btn" data-action="add-cat">Pridėti kategoriją</button>' +
+      "</div>" +
+      '<div class="data-tools">' +
+        '<button class="add-btn" data-action="restore-menu">Atkurti pilną meniu</button>' +
+        '<button class="add-btn" data-action="export">Eksportuoti kopiją</button>' +
+        '<button class="add-btn" data-action="import">Importuoti kopiją</button>' +
+        (data.sales.length ? '<button class="danger" data-action="clear-sales">Trinti užsakymų istoriją</button>' : "") +
+      "</div>" +
+      '<input type="file" id="importFile" accept="application/json" style="display:none">' +
+    "</div>";
+  }
+
+  // ---------- render ----------
+  function render() {
+    document.getElementById("nav").innerHTML = renderNav();
+    var app = document.getElementById("app");
+    var main;
+    if (state.screen === "home") main = renderHome();
+    else if (state.screen === "edit") main = renderEdit();
+    else if (state.view === "tracker") main = renderTracker();
+    else if (state.view === "history") main = renderHistory();
+    else if (state.view === "report") main = renderReport();
+    else main = renderOrder();
+    app.innerHTML = main + renderFinishModal();
+
+    var bar = document.getElementById("mobilebar");
+    var showBar = state.screen === "work" && state.view === "order" && data.order.length > 0 && !state.finishing;
+    bar.classList.toggle("show", showBar);
+    document.getElementById("mbTotal").innerHTML = money(orderTotal());
+
+    if (state.finishing) {
+      var bi = document.getElementById("beeperInput");
+      if (bi) { try { bi.focus(); } catch (e) {} }
+    }
+  }
+
+  // ---------- order actions ----------
+  function addToOrder(itemId) {
+    var it = findItem(itemId);
+    if (!it) return;
+    data.order.push({ lineId: uid(), itemId: itemId, name: it.name, price: it.price, qty: 1,
+      ingredients: (it.ingredients || []).slice(), removed: [] });
+    save(); render();
+  }
+  function changeQty(lineId, delta) {
+    for (var i = 0; i < data.order.length; i++) {
+      if (data.order[i].lineId === lineId) {
+        data.order[i].qty += delta;
+        if (data.order[i].qty <= 0) data.order.splice(i, 1);
+        break;
+      }
+    }
+    save(); render();
+  }
+  function removeLine(lineId) {
+    data.order = data.order.filter(function (l) { return l.lineId !== lineId; });
+    save(); render();
+  }
+  function completeOrder(beeper) {
+    if (!data.order.length) return;
+    var no = data.nextOrderNo || 1;
+    data.nextOrderNo = no + 1;
+    beeper = (beeper == null) ? "" : String(beeper).replace(/[^0-9A-Za-z]/g, "").slice(0, 6);
+    data.sales.push({
+      id: uid(), orderNo: no, beeper: beeper || null, status: "active",
+      time: Date.now(), total: orderTotal(),
+      lines: data.order.map(function (l) {
+        return { name: l.name, qty: l.qty, price: l.price,
+          ingredients: (l.ingredients || []).slice(), removed: (l.removed || []).slice() };
+      })
+    });
+    data.order = [];
+    state.browseCat = null;
+    state.finishing = false;
+    state.editLineId = null;
+    save(); render();
+    toast("Užsakymas #" + no + " priimtas" + (beeper ? "  ·  Pager'is " + beeper : ""));
+  }
+
+  function startEditingOrder(saleId) {
+    var s = findSale(saleId);
+    if (!s || s.status === "closed") return;
+    data.order = s.lines.map(function (l) {
+      var mi = null;
+      for (var i = 0; i < data.items.length; i++) {
+        if (data.items[i].name === l.name) { mi = data.items[i]; break; }
+      }
+      return {
+        lineId: uid(), itemId: mi ? mi.id : ("ed-" + uid()),
+        name: l.name, price: l.price, qty: l.qty,
+        ingredients: unionArr(l.ingredients, mi ? mi.ingredients : []),
+        removed: (l.removed || []).slice()
+      };
+    });
+    state.editingSaleId = saleId;
+    state.view = "order";
+    state.browseCat = null;
+    state.finishing = false;
+    state.detailSaleId = null;
+    state.editLineId = null;
+    save(); render();
+  }
+
+  function saveOrderEdits(beeper) {
+    var s = findSale(state.editingSaleId);
+    if (!s) { state.editingSaleId = null; state.finishing = false; render(); return; }
+    if (!data.order.length) { alert("Užsakymas tuščias. Pridėkite bent vieną patiekalą arba atšaukite."); return; }
+    beeper = (beeper == null) ? "" : String(beeper).replace(/[^0-9A-Za-z]/g, "").slice(0, 6);
+    s.lines = data.order.map(function (l) {
+      return { name: l.name, qty: l.qty, price: l.price,
+        ingredients: (l.ingredients || []).slice(), removed: (l.removed || []).slice() };
+    });
+    s.total = orderTotal();
+    s.beeper = beeper || null;
+    data.order = [];
+    state.editingSaleId = null;
+    state.finishing = false;
+    state.browseCat = null;
+    state.editLineId = null;
+    state.view = "tracker";
+    save(); render();
+    toast("Užsakymas #" + s.orderNo + " atnaujintas");
+  }
+
+  function exitEditing() {
+    data.order = [];
+    state.editingSaleId = null;
+    state.finishing = false;
+    state.browseCat = null;
+    state.editLineId = null;
+  }
+
+  // ---------- clicks ----------
+  document.body.addEventListener("click", function (e) {
+    var el = e.target.closest("[data-action]");
+    if (!el) return;
+    var a = el.getAttribute("data-action");
+    var id = el.getAttribute("data-id");
+
+    if (a === "go") {
+      if (state.editingSaleId) exitEditing();
+      state.screen = el.getAttribute("data-screen");
+      state.view = "order"; state.browseCat = null;
+      state.finishing = false; state.detailSaleId = null;
+      render(); return;
+    }
+    if (a === "home") {
+      if (state.editingSaleId) exitEditing();
+      state.screen = "home"; state.browseCat = null;
+      state.finishing = false; state.detailSaleId = null;
+      render(); return;
+    }
+    if (a === "wview") {
+      if (state.editingSaleId) exitEditing();
+      state.view = el.getAttribute("data-view");
+      state.finishing = false; state.detailSaleId = null; state.editLineId = null; state.reportOpen = null;
+      render(); return;
+    }
+    if (a === "goticket") { var t = document.getElementById("ticket"); if (t) t.scrollIntoView({ behavior: "smooth" }); return; }
+
+    if (a === "toggle-cat") {
+      state.expandedCats[id] = !state.expandedCats[id];
+      render(); return;
+    }
+    if (a === "toggle-all-cats") {
+      var allOpen = data.categories.every(function (c) { return !!state.expandedCats[c.id]; });
+      data.categories.forEach(function (c) { state.expandedCats[c.id] = !allOpen; });
+      render(); return;
+    }
+    if (a === "add") { addToOrder(id); return; }
+    if (a === "inc") { changeQty(id, 1); return; }
+    if (a === "dec") { changeQty(id, -1); return; }
+    if (a === "rm") { removeLine(id); return; }
+    if (a === "toggle-ing-edit") { state.editLineId = (state.editLineId === id) ? null : id; render(); return; }
+    if (a === "toggle-ing") {
+      var ig = el.getAttribute("data-ing");
+      for (var ti = 0; ti < data.order.length; ti++) {
+        if (data.order[ti].lineId === id) {
+          var rl = data.order[ti].removed || (data.order[ti].removed = []);
+          var rx = rl.indexOf(ig);
+          if (rx >= 0) rl.splice(rx, 1); else rl.push(ig);
+          break;
+        }
+      }
+      save(); render(); return;
+    }
+    if (a === "clear") { if (data.order.length && confirm("Išvalyti užsakymą?")) { data.order = []; state.editLineId = null; save(); render(); } return; }
+    if (a === "complete") { if (data.order.length) { state.finishing = true; render(); } return; }
+    if (a === "track-edit") { startEditingOrder(id); return; }
+    if (a === "cancel-edit") { exitEditing(); state.view = "tracker"; save(); render(); return; }
+
+    if (a === "finish-confirm") {
+      var bi = document.getElementById("beeperInput");
+      if (state.editingSaleId) saveOrderEdits(bi ? bi.value : "");
+      else completeOrder(bi ? bi.value : "");
+      return;
+    }
+    if (a === "finish-skip") {
+      if (state.editingSaleId) saveOrderEdits("");
+      else completeOrder("");
+      return;
+    }
+    if (a === "finish-cancel") { state.finishing = false; render(); return; }
+    if (a === "finish-backdrop") { if (e.target === el) { state.finishing = false; render(); } return; }
+
+    if (a === "open-detail") { state.detailSaleId = id; render(); return; }
+    if (a === "close-detail") { state.detailSaleId = null; render(); return; }
+
+    if (a === "report-period") { state.reportPeriod = el.getAttribute("data-period"); state.reportOpen = null; render(); return; }
+    if (a === "report-open") {
+      var rk = el.getAttribute("data-key");
+      state.reportOpen = (state.reportOpen === rk) ? null : rk;
+      render(); return;
+    }
+
+    if (a === "mark-prepared") {
+      var sp = findSale(id);
+      if (sp && sp.status !== "closed") { sp.status = (sp.status === "prepared") ? "active" : "prepared"; save(); render(); }
+      return;
+    }
+    if (a === "close-order") {
+      var sc = findSale(id);
+      if (!sc) return;
+      if (sc.status !== "prepared") { alert("Pirmiausia pažymėkite „Užsakymas paruoštas“."); return; }
+      sc.status = "closed"; save(); render(); toast("Užsakymas #" + sc.orderNo + " užbaigtas");
+      return;
+    }
+    if (a === "reopen-order") {
+      var sr = findSale(id);
+      if (sr) { sr.status = "active"; state.detailSaleId = null; state.view = "tracker"; save(); render(); }
+      return;
+    }
+
+    if (a === "add-cat") {
+      var nm = document.getElementById("ncname").value.trim();
+      if (!nm) { alert("Įveskite kategorijos pavadinimą."); return; }
+      data.categories.push({ id: uid(), name: nm });
+      save(); render(); return;
+    }
+    if (a === "del-cat") {
+      var c = findCat(id);
+      var n = itemsOf(id).length;
+      if (!confirm("Ištrinti kategoriją " + (c ? c.name : "") + (n ? " ir jos " + n + " patiekalus" : "") + "?")) return;
+      data.categories = data.categories.filter(function (x) { return x.id !== id; });
+      data.items = data.items.filter(function (x) { return x.categoryId !== id; });
+      if (state.browseCat === id) state.browseCat = null;
+      delete state.expandedCats[id];
+      save(); render(); return;
+    }
+    if (a === "add-item") {
+      var block = el.closest(".cat-block");
+      var name = block.querySelector(".newname").value.trim();
+      if (!name) { alert("Įveskite patiekalo pavadinimą."); return; }
+      data.items.push({ id: uid(), name: name, price: parseMoney(block.querySelector(".newprice").value), categoryId: id, ingredients: [] });
+      save(); render(); return;
+    }
+    if (a === "del-item") {
+      var it = findItem(id);
+      if (!confirm("Ištrinti " + (it ? it.name : "") + "?")) return;
+      data.items = data.items.filter(function (x) { return x.id !== id; });
+      data.order = data.order.filter(function (l) { return l.itemId !== id; });
+      save(); render(); return;
+    }
+    if (a === "add-ing") {
+      var di = findItem(id);
+      var box = el.closest(".dish");
+      var inp = box ? box.querySelector(".new-ing") : null;
+      var g = inp ? inp.value.trim() : "";
+      if (!di || !g) { if (inp) inp.focus(); return; }
+      if (!Array.isArray(di.ingredients)) di.ingredients = [];
+      if (di.ingredients.indexOf(g) < 0) di.ingredients.push(g);
+      save(); render(); return;
+    }
+    if (a === "del-ing") {
+      var di2 = findItem(id);
+      var g2 = el.getAttribute("data-ing");
+      if (di2 && Array.isArray(di2.ingredients)) {
+        di2.ingredients = di2.ingredients.filter(function (x) { return x !== g2; });
+        save(); render();
+      }
+      return;
+    }
+
+    if (a === "restore-menu") {
+      if (!confirm("Pakeisti dabartinį meniu pilnu numatytuoju meniu? Užsakymų istorija nebus paliesta.")) return;
+      var def = seedData();
+      data.categories = def.categories;
+      data.items = def.items;
+      state.browseCat = null;
+      save(); render();
+      toast("Meniu atkurtas");
+      return;
+    }
+    if (a === "clear-sales") {
+      if (confirm("Ištrinti visą užsakymų istoriją? Šio veiksmo atšaukti negalima.")) {
+        data.sales = []; data.nextOrderNo = 1; save(); render();
+      }
+      return;
+    }
+    if (a === "export") {
+      var payload = JSON.stringify({ categories: data.categories, items: data.items, sales: data.sales, nextOrderNo: data.nextOrderNo }, null, 2);
+      var blob = new Blob([payload], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url; link.download = "kepti-reikalai-kopija-" + new Date().toISOString().slice(0, 10) + ".json";
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      return;
+    }
+    if (a === "import") { document.getElementById("importFile").click(); return; }
+  });
+
+  // menu editing: saved on blur
+  document.body.addEventListener("change", function (e) {
+    var f = e.target.getAttribute && e.target.getAttribute("data-field");
+    if (f) {
+      var id = e.target.getAttribute("data-id");
+      var v = e.target.value;
+      if (f === "cat-name") { var c = findCat(id); if (c) c.name = v.trim() || c.name; }
+      else if (f === "item-name") { var it = findItem(id); if (it) it.name = v.trim() || it.name; }
+      else if (f === "item-price") {
+        var it2 = findItem(id); if (it2) it2.price = parseMoney(v);
+        data.order.forEach(function (l) { if (l.itemId === id && it2) l.price = it2.price; });
+      }
+      save(); render();
+      return;
+    }
+    if (e.target.id === "importFile" && e.target.files && e.target.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var obj = JSON.parse(reader.result);
+          if (!obj.categories || !obj.items) throw new Error("bad");
+          if (!confirm("Pakeisti dabartinį meniu importuotais duomenimis?")) return;
+          data.categories = obj.categories;
+          data.items = obj.items;
+          if (obj.sales) data.sales = obj.sales;
+          var mx = 0;
+          data.sales.forEach(function (s) {
+            if (s.orderNo > mx) mx = s.orderNo;
+            if (!s.status) s.status = "closed";
+          });
+          data.nextOrderNo = Math.max(obj.nextOrderNo || 0, mx + 1, 1);
+          data.items.forEach(function (i) { if (!Array.isArray(i.ingredients)) i.ingredients = []; });
+          data.sales.forEach(function (s) {
+            (s.lines || []).forEach(function (l) {
+              if (!Array.isArray(l.ingredients)) l.ingredients = [];
+              if (!Array.isArray(l.removed)) l.removed = [];
+            });
+          });
+          data.order = [];
+          state.browseCat = null; state.detailSaleId = null; state.finishing = false;
+          state.editingSaleId = null; state.editLineId = null;
+          save(); render();
+          toast("Importuota");
+        } catch (err) {
+          alert("Netinkamas failas.");
+        }
+      };
+      reader.readAsText(e.target.files[0]);
+    }
+  });
+
+  // Enter shortcuts
+  document.body.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target && e.target.classList && e.target.classList.contains("new-ing")) {
+      e.preventDefault();
+      var dish = e.target.closest(".dish");
+      var btn = dish ? dish.querySelector('[data-action="add-ing"]') : null;
+      if (btn) btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      return;
+    }
+    if (e.key === "Enter" && e.target && e.target.id === "beeperInput") {
+      e.preventDefault();
+      if (state.editingSaleId) saveOrderEdits(e.target.value);
+      else completeOrder(e.target.value);
+    }
+  });
+
+  // Android hardware / gesture Back (called from the native shell)
+  window.ktBack = function () {
+    if (state.finishing) { state.finishing = false; render(); return true; }
+    if (state.editLineId) { state.editLineId = null; render(); return true; }
+    if (state.detailSaleId) { state.detailSaleId = null; render(); return true; }
+    if (state.screen === "work") {
+      var anyOpen = Object.keys(state.expandedCats).some(function (k) { return state.expandedCats[k]; });
+      if (state.view === "order" && anyOpen) { state.expandedCats = {}; render(); return true; }
+      if (state.view === "report" && state.reportOpen) { state.reportOpen = null; render(); return true; }
+      if (state.editingSaleId) { exitEditing(); state.view = "tracker"; save(); render(); return true; }
+      state.screen = "home"; state.view = "order"; state.browseCat = null; render(); return true;
+    }
+    if (state.screen === "edit") { state.screen = "home"; render(); return true; }
+    return false;
+  };
+
+  render();
+  window.setInterval(function () {
+    if (state.screen === "work" && state.view === "tracker" && !state.detailSaleId) render();
+  }, 10000);
+})();
+</script>
+</body>
+</html>
